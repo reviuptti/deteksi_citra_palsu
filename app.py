@@ -182,10 +182,10 @@ if uploaded_files:
         with step2:
             st.image(recomp_img, caption="2. Kompresi Ulang (Q=98)", use_container_width=True)
         with step3:
-            diff_display = cv2.convertScaleAbs(diff_img, alpha=15.0, beta=0)
+            diff_display = cv2.convertScaleAbs(diff_img, alpha=20.0, beta=0)
             st.image(diff_display, caption="3. Gambar Selisih (Adiff)", use_container_width=True)
         with step4:
-            tensor_display = cv2.convertScaleAbs(tensor_input, alpha=15.0, beta=0)
+            tensor_display = cv2.convertScaleAbs(tensor_input, alpha=20.0, beta=0)
             st.image(tensor_display, caption="4. Tensor CNN (128x128)", use_container_width=True)
         
         # Grafik Analisis Statistik
