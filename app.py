@@ -5,6 +5,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import io
 import os
+import requests  # <-- Ditambahkan untuk mengunduh file
 
 import tensorflow as tf
 from tensorflow.keras.models import load_model
@@ -18,19 +19,42 @@ st.markdown("""
 Sistem ini mengekstraksi inkonsistensi kompresi (noise) dan menganalisisnya menggunakan Convolutional Neural Network (CNN).
 """)
 
-# ================= MUAT MODEL =================
+# ================= MUAT MODEL DARI GITHUB RELEASES =================
 @st.cache_resource
-def load_forgery_model(model_name="model_deteksi_citra_agro.h5"):
-    # Pastikan file model .h5 kamu ada di folder yang sama
-    if os.path.exists(model_name):
+def load_forgery_model():
+    model_name = "model_deteksi_citra_agro.h5"
+    
+    # ⚠️ GANTI TAUTAN INI DENGAN LINK DOWNLOAD DARI GITHUB RELEASE ANDA
+    model_url = "https://github.com/reviuptti/deteksi_citra_palsu/releases/download/v1.0/model_deteksi_citra_agro.h5"
+
+    # Jika model belum ada di direktori aplikasi (misal saat baru di-deploy)
+    if not os.path.exists(model_name):
+        with st.spinner("Mengunduh model (300 MB) untuk pertama kali. Mohon tunggu, proses ini butuh beberapa menit..."):
+            try:
+                # Unduh dengan stream agar tidak memakan RAM berlebih
+                response = requests.get(model_url, stream=True)
+                response.raise_for_status() # Pastikan link valid (tidak error 404)
+                
+                with open(model_name, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                st.success("✅ Model berhasil diunduh!")
+            except Exception as e:
+                st.error(f"❌ Gagal mengunduh model: {e}")
+                return None
+    
+    # Memuat model
+    try:
         return load_model(model_name)
-    else:
+    except Exception as e:
+        st.error(f"❌ Gagal memuat model: {e}")
         return None
 
 cnn_model = load_forgery_model()
 
 if cnn_model is None:
-    st.warning("⚠️ File model 'model_deteksi_citra_agro.h5' tidak ditemukan di folder aplikasi.")
+    st.warning("⚠️ Model belum siap. Pastikan link GitHub Release sudah benar dan dapat diakses publik.")
 
 # ================= FITUR RESET =================
 if 'uploader_key' not in st.session_state:
@@ -48,7 +72,6 @@ def extract_recompression_steps(image_rgb, quality_factor=98):
     Algoritma 1 dari Paper:
     Menghasilkan gambar kompresi ulang, gambar selisih (Adiff), dan Tensor 128x128.
     """
-    # OpenCV menggunakan format BGR untuk encoding
     img_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
     
     # 1. Kompresi JPEG ulang (A_recompressed)
@@ -86,19 +109,18 @@ def plot_prediction_bar(auth_prob, tamp_prob):
     fig, ax = plt.subplots(figsize=(6, 3.5))
     labels = ['ASLI (Authentic)', 'PALSU (Tampered)']
     probabilities = [auth_prob, tamp_prob]
-    colors = ['#28a745', '#dc3545'] # Hijau untuk Asli, Merah untuk Palsu
+    colors = ['#28a745', '#dc3545']
     
     bars = ax.bar(labels, probabilities, color=colors, width=0.5)
     ax.set_ylim(0, 100)
     ax.set_ylabel("Probabilitas (%)", fontsize=10)
     ax.set_title("Tingkat Keyakinan Prediksi CNN", fontsize=10)
     
-    # Tambahkan angka persentase di atas bar
     for bar in bars:
         height = bar.get_height()
         ax.annotate(f'{height:.2f}%',
                     xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3),  # 3 points vertical offset
+                    xytext=(0, 3), 
                     textcoords="offset points",
                     ha='center', va='bottom', fontsize=10, fontweight='bold')
     
@@ -147,13 +169,12 @@ if uploaded_files:
             
             with res_col2:
                 st.markdown("#### Grafik Hasil Analisis Prediksi")
-                # Menampilkan Grafik Bar
                 fig_bar = plot_prediction_bar(auth_prob, tamp_prob)
                 st.pyplot(fig_bar)
 
         # --- TAMPILAN VISUALISASI PROSES & GRAFIK TAMBAHAN ---
         st.markdown("#### Bedah Tahapan Ekstraksi Fitur (CNN Input)")
-        st.info("Area yang dimanipulasi akan memiliki inkonsistensi sejarah kompresi, sehingga akan menonjol (terang) pada Gambar Selisih ($A_{diff}$).")
+        st.info("Area yang dimanipulasi akan memiliki inkonsistensi sejarah kompresi, sehingga akan menonjol (terang) pada Gambar Selisih (Adiff).")
         
         step1, step2, step3, step4 = st.columns(4)
         with step1:
@@ -161,7 +182,6 @@ if uploaded_files:
         with step2:
             st.image(recomp_img, caption="2. Kompresi Ulang (Q=98)", use_container_width=True)
         with step3:
-            # Diperkuat kontrasnya 5x lipat hanya untuk tampilan mata manusia
             diff_display = cv2.convertScaleAbs(diff_img, alpha=5.0, beta=0)
             st.image(diff_display, caption="3. Gambar Selisih (Adiff)", use_container_width=True)
         with step4:
